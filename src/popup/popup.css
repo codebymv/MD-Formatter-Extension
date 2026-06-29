@@ -1,0 +1,450 @@
+/* =============================================================================
+   MD Formatter — Design Tokens  (Rose on Warm Paper · light · flat)
+   A warm off-white editorial surface with a single muted rose accent.
+   No gradients. Everything below the tokens block consumes these variables.
+   ============================================================================= */
+
+:root {
+  /* ---- Color primitives ---------------------------------------------------- */
+
+  /* Warm "paper" neutral ramp (light → dark ink) */
+  --c-paper-0: #ffffff;
+  --c-paper-50: #fbf9f6;
+  --c-paper-100: #f8f5f2; /* app background */
+  --c-paper-200: #f1ece6; /* sunken surfaces */
+  --c-paper-300: #e6ded8; /* borders */
+  --c-paper-400: #d6ccc4; /* strong borders */
+  --c-paper-500: #b5a89f;
+  --c-paper-600: #8c7f79; /* subtle text */
+  --c-paper-700: #6b5f5a; /* muted text */
+  --c-paper-800: #463e3b;
+  --c-paper-900: #2a2422;
+  --c-paper-950: #1a1718; /* primary text / ink */
+
+  /* Rose: the single signature accent */
+  --c-rose-300: #e58d95;
+  --c-rose-400: #d46a75;
+  --c-rose-500: #c14953; /* primary */
+  --c-rose-600: #a63842;
+  --c-rose-700: #872a33;
+
+  /* Semantic primitives (kept distinct from the rose brand) */
+  --c-success-600: #2e7d52;
+  --c-danger-600: #c0392b;
+  --c-danger-text: #962014;
+  --c-danger-bg: #fbedeb;
+
+  /* ---- Semantic color roles ------------------------------------------------ */
+  --color-bg: var(--c-paper-100);
+  --color-surface: var(--c-paper-0);
+  --color-surface-raised: var(--c-paper-0);
+  --color-surface-sunken: var(--c-paper-200);
+  --color-surface-input: var(--c-paper-0);
+  --color-hover: var(--c-paper-200);
+
+  --color-border: var(--c-paper-300);
+  --color-border-strong: var(--c-paper-400);
+  --color-border-subtle: rgba(26, 23, 24, 0.06);
+
+  --color-text: var(--c-paper-950);
+  --color-text-muted: var(--c-paper-700);
+  --color-text-subtle: var(--c-paper-600);
+
+  --color-primary: var(--c-rose-500);
+  --color-primary-hover: var(--c-rose-600);
+  --color-on-primary: #ffffff;
+  --color-accent: var(--c-rose-500);
+
+  --color-focus-ring: rgba(193, 73, 83, 0.28);
+
+  --color-danger-bg: var(--c-danger-bg);
+  --color-danger-border: rgba(192, 57, 43, 0.35);
+  --color-danger-text: var(--c-danger-text);
+  --color-success: var(--c-success-600);
+
+  /* ---- Typography ---------------------------------------------------------- */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas,
+    monospace;
+
+  --fs-eyebrow: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 17px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.4;
+  --lh-normal: 1.55;
+
+  --tracking-eyebrow: 0.09em;
+  --tracking-wide: 0.02em;
+
+  /* ---- Space (4px base grid) ----------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  /* ---- Radii --------------------------------------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation (soft, warm — tuned for a light surface) ------------------ */
+  --shadow-sm: 0 1px 2px rgba(42, 36, 34, 0.06);
+  --shadow-md: 0 8px 24px rgba(42, 36, 34, 0.1);
+  --shadow-accent: 0 3px 12px rgba(193, 73, 83, 0.22);
+
+  /* ---- Sizing -------------------------------------------------------------- */
+  --popup-width: 420px;
+
+  /* ---- Motion -------------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-fast: 0.12s;
+  --dur-med: 0.2s;
+}
+
+/* =============================================================================
+   Base
+   ============================================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: var(--popup-width);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(193, 73, 83, 0.18);
+}
+
+/* Rose scrollbars across the popup (page + textareas), matching the accent.
+   Firefox uses scrollbar-color; WebKit/Blink use the ::-webkit rules below. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-rose-400) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--c-rose-400);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--c-rose-500);
+  background-clip: content-box;
+}
+
+/* =============================================================================
+   Layout
+   ============================================================================= */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+/* ---- Header / brand ------------------------------------------------------- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.brand__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.brand__mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  object-fit: contain;
+}
+
+.brand__wordmark {
+  display: block;
+  height: 22px;
+  width: auto;
+  max-width: 210px;
+  object-fit: contain;
+}
+
+/* =============================================================================
+   Fields
+   ============================================================================= */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field__label {
+  font-size: var(--fs-eyebrow);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--color-text-subtle);
+}
+
+.field__label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.field__info {
+  width: 13px;
+  height: 13px;
+  color: var(--color-text-subtle);
+  cursor: help;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.field__info:hover,
+.field__info:focus-visible {
+  color: var(--color-primary);
+  outline: none;
+}
+
+.field__hint {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+  color: var(--color-text-subtle);
+}
+
+.field__input,
+.textarea {
+  width: 100%;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-base);
+  transition: border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+
+.field__input::placeholder,
+.textarea::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.field__input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 92px;
+  line-height: var(--lh-snug);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  tab-size: 2;
+}
+
+.textarea--output {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+/* =============================================================================
+   Buttons
+   ============================================================================= */
+
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: inherit;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-hover);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn--lg {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-lg);
+}
+
+.btn--primary {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: transparent;
+  box-shadow: var(--shadow-accent);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  border-color: transparent;
+}
+
+.btn--success {
+  color: var(--color-on-primary);
+  background: var(--color-success);
+  border-color: transparent;
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: none;
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--color-hover);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn__icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+/* =============================================================================
+   Settings panel
+   ============================================================================= */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-md);
+}
+
+.settings__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* =============================================================================
+   Action rows, alerts, misc
+   ============================================================================= */
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.alert {
+  display: flex;
+  gap: var(--space-2);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger-text);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  border: 0;
+  margin: 0;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: rgba(193, 73, 83, 0.1);
+  color: var(--c-rose-700);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-xs);
+}

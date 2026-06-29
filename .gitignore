@@ -1,0 +1,53 @@
+# ---- Dependencies ----------------------------------------------------------
+node_modules/
+.pnp/
+.pnp.js
+
+# ---- Build output ----------------------------------------------------------
+# The loadable extension is built from source with `npm run build`.
+# Un-ignore this if you'd rather commit a ready-to-load dist/.
+dist/
+build/
+*.tsbuildinfo
+
+# ---- Caches ----------------------------------------------------------------
+.vite/
+.cache/
+.eslintcache
+*.local
+
+# ---- Logs ------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---- Environment / secrets -------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ---- Editor / IDE ----------------------------------------------------------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ---- OS / filesystem cruft -------------------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+# OneDrive / Windows Explorer metadata (this repo lives under OneDrive)
+desktop.ini
+
+# ---- Misc ------------------------------------------------------------------
+tmp/
+*.zip
+*.crx
+*.pem
