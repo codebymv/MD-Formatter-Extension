@@ -1,12 +1,40 @@
 {
   "manifest_version": 3,
   "name": "MD Formatter",
-  "version": "0.1.0",
+  "version": "0.2.14",
   "description": "Turn messy pull request notes into clean, well-structured Markdown you can paste into GitHub, Forgejo, or GitLab.",
   "action": {
     "default_title": "MD Formatter",
     "default_popup": "popup.html"
   },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://github.com/*",
+        "https://gitlab.com/*",
+        "*://*/*/*/pulls/*",
+        "*://*/*/*/compare/*",
+        "*://*/*/merge_requests/*"
+      ],
+      "js": ["assets/content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "type": "module"
+    }
+  ],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://gitlab.com/*",
+    "*://*/*/*/pulls/*",
+    "*://*/*/*/compare/*",
+    "*://*/*/merge_requests/*",
+    "http://localhost:11434/*",
+    "http://127.0.0.1:11434/*"
+  ],
   "permissions": ["storage"],
   "icons": {
     "16": "icons/icon16.png",

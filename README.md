@@ -13,26 +13,54 @@ smarter when you configure an OpenAI-compatible API key.
 
 ## Features
 
-- Popup UI: raw input, preset selector, format button, output, copy button.
+- Popup UI: raw input, style selector, **Format Markdown** / **Quiz me** /
+  **Elevator pitch**, **line diff preview** (before/after, unified or
+  **side-by-side columns**), output, copy button. **Quiz me** and **Elevator
+  pitch** need a model endpoint (API key or Ollama); they stream a short
+  fact-checked Q&A quiz or a 2–4 sentence spoken pitch from the raw
+  description. While a model stream is in flight, **Cancel** aborts the
+  request (same AbortSignal path as in-page Cancel). Columns / Unified
+  preference is persisted in `chrome.storage.local` and shared with the
+  in-page preview.
 - Presets: **Standard / Feature / Bugfix / Release** — each guides the section
-  structure without forcing irrelevant headings.
+  structure without forcing irrelevant headings. The selected style is persisted
+  and shared by the popup and the in-page toolbar.
+- **Saved formatting profiles**: name a custom section order (cloned from a
+  built-in), pick it from the popup or in-page toolbar, and delete it later.
+  Profiles are stored in `chrome.storage.local` (max 20).
+- Content script on GitHub, GitLab, and Forgejo-style `/pulls` / `/compare` URLs:
+  injects an in-page toolbar (style picker + **Format Markdown**) above the
+  PR / MR description editor (classic textarea, scoped GitHub ProseMirror, or
+  GitLab TipTap / Content Editor). Format shows a before/after **diff preview**
+  (default **Columns** side-by-side, toggle **Unified**; layout preference
+  shared with the popup) with **Apply** / **Dismiss** before writing;
+  formatting itself runs via the background service worker. While a model
+  stream is in flight, the toolbar shows **char-count progress** and a
+  **Cancel** control that aborts the request.
 - Inline `code` for routes, file names, env vars, commands, config keys.
 - Bullet lists per section; fenced code blocks and existing formatting preserved.
 - Two backends behind one `formatPrDescription()` abstraction: an offline
-  formatter (no key) and an OpenAI-compatible API call (when a key is set).
-- Settings (API key / model / base URL) stored in `chrome.storage.local`.
+  formatter (no key) and an OpenAI-compatible **streaming** chat completion
+  (SSE) when a model endpoint is configured. The popup updates the output as
+  tokens arrive and can **Cancel** mid-stream; the in-page toolbar shows
+  stream progress and can cancel.
+- Settings (API key / model / base URL / **endpoint preset**) stored in
+  `chrome.storage.local` only — never committed or logged.
+- **Endpoint presets**: **OpenAI**, **Ollama (local)**, **OpenRouter**, and
+  **Custom** — one click fills a default model + OpenAI-compatible base URL.
+  Ollama works without an API key (`http://localhost:11434/v1`).
 - Friendly errors for empty input, missing/invalid key, network failures, and
   empty model responses.
-- Minimal permissions: only `storage`.
+- Minimal permissions: `storage`, PR-host matches, plus local Ollama
+  (`localhost` / `127.0.0.1:11434`) for the local endpoint preset.
 
 ---
 
 ## 1. Setup
 
-Requires Node 18+ (tested on Node 22).
+Requires Node 18+ (tested on Node 22). From this folder (`zEXTENSIONS/MD-formatter`):
 
 ```bash
-cd pr-markdown-formatter-extension
 npm install
 npm run build
 ```
@@ -47,6 +75,7 @@ Useful scripts:
 | `npm run dev` | Rebuild `dist/` on every change (reload the extension to see updates) |
 | `npm run dev:preview` | Run the popup in a normal browser tab at `http://localhost:5174` (offline formatter only — `chrome.*` APIs are stubbed) |
 | `npm run typecheck` | Type-check only |
+| `npm test` | Unit tests (formatter, SSE stream / abort with mocked fetch, release quiz + elevator pitch parse/normalize + mocked SSE, format job + popup cancel sessions, in-page progress labels, endpoint presets, profiles, PR editor DOM helpers, line diff / preview panel) |
 
 ---
 
@@ -64,24 +93,29 @@ extension card.
 
 ---
 
-## 3. Configure the API key (optional but recommended)
+## 3. Configure a model endpoint (optional but recommended)
 
-Without a key the extension uses the built-in offline heuristic formatter. To
-enable the model-powered formatter:
+Without a keyed cloud endpoint (and without the Ollama preset) the extension
+uses the built-in offline heuristic formatter. To enable the model-powered
+formatter:
 
 1. Open the popup → **Settings**.
-2. Fill in:
-   - **API key** — e.g. an OpenAI key (`sk-...`).
-   - **Model** — default `gpt-4.1-mini`; any OpenAI-compatible chat model works.
-   - **Base URL** — default `https://api.openai.com/v1`. Point this at any
-     OpenAI-compatible endpoint (Azure OpenAI, OpenRouter, a local server, etc.).
-3. Click **Save settings**.
+2. Pick an **Endpoint** preset:
+   - **OpenAI** — `gpt-4.1-mini` @ `https://api.openai.com/v1` (API key required).
+   - **Ollama (local)** — `llama3.2` @ `http://localhost:11434/v1` (API key optional).
+   - **OpenRouter** — routed model id @ `https://openrouter.ai/api/v1` (API key required).
+   - **Custom** — keep your own model + base URL (any OpenAI-compatible server).
+3. Adjust **Model** / **Base URL** if needed, then paste an **API key** when the
+   preset requires one.
+4. Click **Save settings**.
 
-The key is stored locally via `chrome.storage.local`, is never logged, and is
-only sent to the endpoint you configure, only when you click **Format Markdown**.
+The key and endpoint choice are stored locally via `chrome.storage.local`, are
+never logged, and are only sent to the endpoint you configure when you click
+**Format Markdown**, **Quiz me**, or **Elevator pitch**.
 
 > The request goes to `{Base URL}/chat/completions`. Make sure the endpoint
-> allows requests from a browser extension origin (CORS). OpenAI's API does.
+> allows requests from a browser extension origin (CORS). OpenAI’s API does;
+> local Ollama is covered by the extension’s localhost host permissions.
 
 ---
 
@@ -136,31 +170,55 @@ Then click **Copy Markdown** — the button briefly reads **Copied**.
 ## Project structure
 
 ```txt
-pr-markdown-formatter-extension/
+MD-formatter/
   public/
     manifest.json        # MV3 manifest (copied verbatim into dist/)
+    content.css          # styles for the in-page Format button
     icons/               # generated PNG icons
   popup.html             # production popup entry (build input)
   index.html             # dev-only entry for npm run dev:preview
   src/
     popup/
-      Popup.tsx          # the UI
+      Popup.tsx          # the UI (+ Cancel while Format / Quiz / Pitch streams)
+      popupFormatSession.ts # single in-flight AbortController for popup jobs
       main.tsx           # React mount
       popup.css          # styles
+    content/
+      contentScript.ts   # GitHub / Forgejo / GitLab injection entry
+      prEditor.ts        # find PR/MR body + mount toolbar (style + Format + Cancel)
+      formatProgress.ts  # stream progress label + request id helpers
+      diffPreviewPanel.ts # in-page before/after line-diff panel (Apply / Dismiss; Columns / Unified)
+    diff/
+      lineDiff.ts        # pure line LCS + side-by-side pairing (popup + content)
+    background/
+      serviceWorker.ts   # message handler → formatPrDescription (+ progress / cancel)
+      formatJobs.ts      # in-flight AbortController registry (requestId)
+    messaging/
+      protocol.ts        # typed content ↔ background messages (format / progress / cancel)
     formatter/
-      formatPrDescription.ts  # public API: local + OpenAI-compatible backends
+      formatPrDescription.ts  # public API: local + OpenAI-compatible streaming backends
+      releaseQuiz.ts          # "Quiz me" prompts, Q/A parse, model-backed generation
+      elevatorPitch.ts        # "Elevator pitch" prompts, normalize, model-backed generation
+      sseChatStream.ts        # OpenAI-compatible SSE parse + streamChatCompletion
       localFormatter.ts       # offline heuristic formatter (no network)
-      prompt.ts               # system + preset-aware user prompt
-      types.ts                # FormatPreset, Settings, presets, errors
+      prompt.ts               # system + style-aware user prompt
+      profile.ts              # pure saved-profile helpers (create / resolve / upsert)
+      endpointPresets.ts      # OpenAI / Ollama / OpenRouter / Custom endpoint catalog
+      types.ts                # FormatPreset, SavedProfile, Settings, errors
     storage/
       settings.ts        # chrome.storage.local persistence (+ in-memory fallback)
+      preset.ts          # persisted FormatPreset (legacy + built-in fallback)
+      profiles.ts        # saved profiles + active FormatSelection
+      diffLayout.ts      # persisted Columns / Unified preference (popup ↔ content)
+  test/
   vite.config.ts
   tsconfig.json
   package.json
 ```
 
-The formatter is intentionally decoupled from the popup so a future content
-script can reuse `formatPrDescription()` directly.
+The formatter stays decoupled from the popup: the content script messages the
+service worker, which calls `formatPrDescription()` with the active style
+(built-in preset or saved profile guide).
 
 ---
 
@@ -171,22 +229,32 @@ script can reuse `formatPrDescription()` directly.
   vars, file names, commands), but it does **not** infer tables or backtick
   ambiguous identifiers like `AuthGuard`. Configure an API key for full
   formatting (tables, smarter inline code, prose cleanup).
-- **No streaming.** The popup waits for the full model response.
+- **In-page Format streams progress, not live editor text.** While formatting,
+  the toolbar shows streamed character counts and **Cancel**; the PR body is
+  unchanged until you **Apply** the diff preview. The popup paints tokens into
+  its output textarea as they arrive and offers **Cancel** mid-stream.
 - **CORS.** Some self-hosted OpenAI-compatible endpoints may reject extension
   requests unless they allow the extension origin.
-- **No GitHub/Forgejo page injection yet** — paste → format → copy only (by
-  design for the MVP).
+- **GitHub rich editors.** The in-page button targets classic `textarea` PR
+  bodies and scoped ProseMirror PR description surfaces (e.g.
+  `form#new_pull_request .ProseMirror`). Generic review/comment ProseMirror
+  boxes are intentionally ignored. Rich-text (non-source) mode may lose some
+  markdown syntax on read when no backing form field is present.
+- **Self-hosted Forgejo hosts** are covered when the URL matches
+  `/*/pulls/*` or `/*/compare/*`; the script only mounts when a known PR body
+  field is present.
+- **GitLab MR pages** target classic `#merge_request_description` /
+  `merge_request[description]` textareas and TipTap / Content Editor surfaces
+  on create and edit forms (`gitlab.com` and `/*/merge_requests/*`). TipTap
+  detection is scoped to an MR description backing field (hidden
+  `merge_request[description]` input near `[data-testid="content-editor"]`);
+  note/comment editors are ignored. Rich-text mode still prefers the backing
+  field for markdown reads; writing uses the same ProseMirror insert path as
+  GitHub (literal markdown may appear until GitLab re-serializes).
 - Bundled icons are simple generated placeholders.
 
 ---
 
 ## Roadmap (v2)
 
-- Content script for GitHub / Forgejo / GitLab PR pages.
-- **Format current PR description** button inside the PR editor.
-- Diff preview (before/after).
-- Saved formatting profiles.
-- First-class local Ollama / OpenAI-compatible endpoint presets.
-- "Elevator pitch" and "quiz me on this release" generation.
-- Streaming responses.
-```
+- Live Ollama / cloud smoke for Format + Quiz me + Elevator pitch (manual).

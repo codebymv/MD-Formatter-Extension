@@ -1,4 +1,5 @@
-import { FormatPreset, PRESETS } from "./types";
+import { guideFromPreset } from "./profile";
+import { FormatGuide, FormatPreset } from "./types";
 
 /**
  * Builds the system + user prompt sent to the model. Kept separate from the
@@ -21,15 +22,18 @@ Rules:
 - Do not wrap the final answer in commentary.
 - Return only the formatted Markdown.`;
 
-function presetGuidance(preset: FormatPreset): string {
-  const meta = PRESETS[preset];
-  const headings = meta.sections.map((s) => `## ${s}`).join("\n");
-  return `${meta.label}\n\nPrefer this section structure when the input supports it (omit any section that has no relevant content; add others if the input clearly warrants them):\n\n${headings}`;
+function styleGuidance(guide: FormatGuide): string {
+  const headings = guide.sections.map((s) => `## ${s}`).join("\n");
+  return `${guide.label}\n\nPrefer this section structure when the input supports it (omit any section that has no relevant content; add others if the input clearly warrants them):\n\n${headings}`;
 }
 
-export function buildUserPrompt(input: string, preset: FormatPreset): string {
+export function buildUserPrompt(
+  input: string,
+  style: FormatPreset | FormatGuide,
+): string {
+  const guide = typeof style === "string" ? guideFromPreset(style) : style;
   return `Preset:
-${presetGuidance(preset)}
+${styleGuidance(guide)}
 
 Raw PR description:
 ${input}`;

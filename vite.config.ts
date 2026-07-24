@@ -2,8 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
-// The popup is the only HTML entry. The manifest lives in `public/` and is
-// copied verbatim to the build output, so the loaded extension dir is `dist/`.
+// Popup HTML + background service worker + content script. The manifest lives
+// in `public/` and is copied verbatim to `dist/`.
 export default defineConfig({
   plugins: [react()],
   build: {
@@ -12,6 +12,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: resolve(__dirname, "popup.html"),
+        background: resolve(__dirname, "src/background/serviceWorker.ts"),
+        content: resolve(__dirname, "src/content/contentScript.ts"),
       },
       output: {
         // Stable, predictable filenames so the manifest can reference them.

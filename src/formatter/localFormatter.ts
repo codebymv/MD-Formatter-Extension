@@ -8,6 +8,9 @@
  * usable for development and for users who haven't configured a key yet.
  */
 
+import { guideFromPreset } from "./profile";
+import { FormatGuide, FormatPreset, PRESETS } from "./types";
+
 // Headings we recognize when an author types a bare section label on its own
 // line (e.g. "Backend"). Maps a lowercased label to its canonical Title Case.
 const KNOWN_HEADINGS = new Map<string, string>(
@@ -45,6 +48,20 @@ const KNOWN_HEADINGS = new Map<string, string>(
     "Performance",
   ].map((h) => [h.toLowerCase(), h]),
 );
+
+/**
+ * Synonym groups. When a heading matches any member and the active preset
+ * prefers another member of the same group, rewrite to that preferred name.
+ * Never invents sections — only renames what the author already wrote.
+ */
+const HEADING_ALIAS_GROUPS: string[][] = [
+  ["Summary", "Overview"],
+  ["What Changed", "Changes"],
+  ["Root Cause", "Background", "Motivation", "Context"],
+  ["Configuration", "Config"],
+  ["Test Plan", "Testing", "Tests"],
+  ["Automated Verification", "Verification"],
+];
 
 // Inline technical tokens that read better in backticks. Conservative: only
 // wraps tokens that are clearly code-ish and not already inside backticks.
@@ -207,8 +224,107 @@ function shouldBulletize(heading: string | undefined, lines: string[]): boolean 
   return contentLines.length >= 2;
 }
 
-export function formatLocally(input: string): string {
-  const blocks = splitIntoBlocks(input);
+/**
+ * Rewrite a heading toward a synonym the active guide prefers, when one exists.
+ */
+export function canonicalizeHeading(
+  heading: string,
+  sections: string[],
+): string {
+  const preferred = new Map(sections.map((s) => [s.toLowerCase(), s]));
+  const exact = preferred.get(heading.toLowerCase());
+  if (exact) return exact;
+
+  for (const group of HEADING_ALIAS_GROUPS) {
+    const lower = group.map((g) => g.toLowerCase());
+    if (!lower.includes(heading.toLowerCase())) continue;
+    for (const name of group) {
+      const match = preferred.get(name.toLowerCase());
+      if (match) return match;
+    }
+  }
+  return heading;
+}
+
+/** @deprecated Prefer canonicalizeHeading with explicit sections. */
+export function canonicalizeHeadingForPreset(
+  heading: string,
+  preset: FormatPreset,
+): string {
+  return canonicalizeHeading(heading, PRESETS[preset].sections);
+}
+
+function resolveGuide(style: FormatPreset | FormatGuide): FormatGuide {
+  return typeof style === "string" ? guideFromPreset(style) : style;
+}
+
+/**
+ * Apply synonym rewrites, merge duplicate headings, then order sections
+ * so guide-preferred headings come first (remaining keep encounter order).
+ */
+function applyGuide(blocks: Block[], guide: FormatGuide): Block[] {
+  const normalized: Block[] = blocks.map((b) =>
+    b.heading
+      ? { heading: canonicalizeHeading(b.heading, guide.sections), lines: [...b.lines] }
+      : { lines: [...b.lines] },
+  );
+
+  // Merge headed blocks that share a canonical title; keep first headless as-is.
+  const merged: Block[] = [];
+  for (const block of normalized) {
+    if (!block.heading) {
+      merged.push(block);
+      continue;
+    }
+    const existing = merged.find(
+      (m) => m.heading && m.heading.toLowerCase() === block.heading!.toLowerCase(),
+    );
+    if (existing) {
+      if (existing.lines.length && block.lines.length) existing.lines.push("");
+      existing.lines.push(...block.lines);
+    } else {
+      merged.push(block);
+    }
+  }
+
+  const order = guide.sections.map((s) => s.toLowerCase());
+  const leading: Block[] = [];
+  const headed: Block[] = [];
+  for (const block of merged) {
+    if (!block.heading) {
+      // Only leading (pre-first-heading) headless content is kept at front;
+      // after headings appear, headless blocks shouldn't occur from the splitter.
+      if (headed.length === 0) leading.push(block);
+      else headed.push(block);
+    } else {
+      headed.push(block);
+    }
+  }
+
+  const ranked: Block[] = [];
+  const used = new Set<Block>();
+  for (const key of order) {
+    for (const block of headed) {
+      if (used.has(block) || !block.heading) continue;
+      if (block.heading.toLowerCase() === key) {
+        ranked.push(block);
+        used.add(block);
+      }
+    }
+  }
+  for (const block of headed) {
+    if (!used.has(block)) ranked.push(block);
+  }
+
+  return [...leading, ...ranked];
+}
+
+export function formatLocally(
+  input: string,
+  style: FormatPreset | FormatGuide = "standard",
+): string {
+  const guide = resolveGuide(style);
+  const blocks = applyGuide(splitIntoBlocks(input), guide);
 
   const sections: string[] = [];
 
