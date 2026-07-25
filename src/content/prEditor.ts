@@ -546,6 +546,25 @@ function createPresetSelect(
   return select;
 }
 
+function setCancelTabbable(button: HTMLButtonElement, tabbable: boolean): void {
+  button.hidden = !tabbable;
+  button.disabled = !tabbable;
+  // Prefer the attribute: linkedom's tabIndex getter can stick at -1 after the
+  // first assignment even when the attribute is later set to "0".
+  button.setAttribute("tabindex", tabbable ? "0" : "-1");
+  try {
+    button.tabIndex = tabbable ? 0 : -1;
+  } catch {
+    // ignore hosts that reject the property write
+  }
+  button.setAttribute("aria-hidden", tabbable ? "false" : "true");
+}
+
+function isCancelInTabOrder(button: HTMLButtonElement): boolean {
+  if (button.hidden || button.disabled) return false;
+  return button.getAttribute("tabindex") !== "-1";
+}
+
 /**
  * Show (or reuse) a Cancel control on the toolbar for an in-flight job.
  */
@@ -562,8 +581,7 @@ export function showFormatCancelButton(
     button.setAttribute("aria-label", "Cancel in-flight request");
     toolbar.appendChild(button);
   }
-  button.hidden = false;
-  button.disabled = false;
+  setCancelTabbable(button, true);
   button.onclick = (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -577,8 +595,7 @@ export function hideFormatCancelButton(toolbar: HTMLElement | null | undefined):
   if (!toolbar) return;
   const button = toolbar.querySelector<HTMLButtonElement>(`.${CANCEL_BTN_CLASS}`);
   if (!button) return;
-  button.hidden = true;
-  button.disabled = true;
+  setCancelTabbable(button, false);
   button.onclick = null;
 }
 
@@ -587,6 +604,22 @@ export function findToolbarActionButtons(toolbar: HTMLElement): HTMLButtonElemen
   return Array.from(
     toolbar.querySelectorAll<HTMLButtonElement>(`button.${FORMAT_BTN_CLASS}`),
   );
+}
+
+/**
+ * Focusable toolbar controls in DOM / tab order: style picker → Format →
+ * Quiz → Pitch → Cancel (only while an in-flight job shows Cancel).
+ */
+export function listToolbarFocusOrder(toolbar: HTMLElement): HTMLElement[] {
+  const order: HTMLElement[] = [];
+  const select = findToolbarPresetSelect(toolbar);
+  if (select) order.push(select);
+  order.push(...findToolbarActionButtons(toolbar));
+  const cancel = toolbar.querySelector<HTMLButtonElement>(`.${CANCEL_BTN_CLASS}`);
+  if (cancel && isCancelInTabOrder(cancel)) {
+    order.push(cancel);
+  }
+  return order;
 }
 
 /** Enable or disable Format / Quiz / Pitch while one job is in flight. */
@@ -640,6 +673,8 @@ export function injectFormatButton(
 
   const row = document.createElement("div");
   row.className = TOOLBAR_CLASS;
+  row.setAttribute("role", "toolbar");
+  row.setAttribute("aria-label", "MD Formatter");
 
   const selection = resolveToolbarSelection(handlers);
   row.appendChild(
@@ -679,14 +714,13 @@ export function injectFormatButton(
     });
   }
 
-  // Present but hidden until a job is in flight.
+  // Present but hidden / untabbable until a job is in flight.
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = CANCEL_BTN_CLASS;
   cancel.textContent = "Cancel";
   cancel.setAttribute("aria-label", "Cancel in-flight request");
-  cancel.hidden = true;
-  cancel.disabled = true;
+  setCancelTabbable(cancel, false);
   row.appendChild(cancel);
 
   const mountParent = surface.parentElement;

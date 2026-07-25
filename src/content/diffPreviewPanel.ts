@@ -24,6 +24,9 @@ export const PREVIEW_LAYOUT_COLUMNS_CLASS = "md-formatter-preview__layout-column
 
 export type { DiffPreviewLayout };
 
+/** AbortControllers for Escape listeners bound to open preview panels. */
+const previewEscapeControllers = new WeakMap<HTMLElement, AbortController>();
+
 export interface DiffPreviewHandlers {
   onApply: (markdown: string) => void | Promise<void>;
   onDismiss?: () => void | Promise<void>;
@@ -131,11 +134,31 @@ function setLayoutToggleState(
   columnsBtn.classList.toggle("md-formatter-preview__layout-btn--active", isColumns);
 }
 
+function releasePreviewEscape(panel: HTMLElement): void {
+  const controller = previewEscapeControllers.get(panel);
+  if (!controller) return;
+  controller.abort();
+  previewEscapeControllers.delete(panel);
+}
+
+function removePreviewPanel(panel: HTMLElement): void {
+  releasePreviewEscape(panel);
+  panel.remove();
+}
+
+function isEscapeKey(event: KeyboardEvent): boolean {
+  return event.key === "Escape" || event.key === "Esc";
+}
+
 /** Remove any existing preview panel under `root`. */
 export function dismissDiffPreviewPanel(root: ParentNode = document): void {
   const existing = root.querySelectorAll(`.${PREVIEW_PANEL_CLASS}`);
   for (const el of Array.from(existing)) {
-    el.remove();
+    if (el instanceof HTMLElement) {
+      removePreviewPanel(el);
+    } else {
+      el.remove();
+    }
   }
 }
 
@@ -197,6 +220,11 @@ export function mountDiffPreviewPanel(
   const actions = doc.createElement("div");
   actions.className = "md-formatter-preview__actions";
 
+  const dismissPanel = (): void => {
+    removePreviewPanel(panel);
+    void options.onDismiss?.();
+  };
+
   const dismissBtn = doc.createElement("button");
   dismissBtn.type = "button";
   dismissBtn.className = PREVIEW_DISMISS_CLASS;
@@ -205,8 +233,7 @@ export function mountDiffPreviewPanel(
   dismissBtn.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    panel.remove();
-    void options.onDismiss?.();
+    dismissPanel();
   });
 
   const applyBtn = doc.createElement("button");
@@ -220,9 +247,27 @@ export function mountDiffPreviewPanel(
     event.stopPropagation();
     // Real browsers skip click on disabled buttons; linkedom may still fire.
     if (applyBtn.disabled || !summary.changed) return;
-    panel.remove();
+    removePreviewPanel(panel);
     void options.onApply(options.after);
   });
+
+  // Escape dismisses the open preview (document listener; cleaned up on remove).
+  const escapeController = new AbortController();
+  previewEscapeControllers.set(panel, escapeController);
+  doc.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isEscapeKey(event as KeyboardEvent)) return;
+      if (!panel.isConnected) {
+        releasePreviewEscape(panel);
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      dismissPanel();
+    },
+    { signal: escapeController.signal },
+  );
 
   let body =
     layout === "columns" ? renderColumns(doc, sideRows) : renderUnified(doc, lines);

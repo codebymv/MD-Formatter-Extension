@@ -187,4 +187,46 @@ describe("mountDiffPreviewPanel", () => {
     dismissDiffPreviewPanel(document);
     assert.equal(findDiffPreviewPanel(document), null);
   });
+
+  it("dismisses the open preview when Escape is pressed", () => {
+    const { window, document } = load(`
+      <div class="wrap">
+        <div class="md-formatter-toolbar"></div>
+      </div>
+    `);
+    const toolbar = document.querySelector(".md-formatter-toolbar") as HTMLElement;
+    let dismissed = 0;
+    mountDiffPreviewPanel(toolbar, {
+      before: "a",
+      after: "b",
+      onApply: () => undefined,
+      onDismiss: () => {
+        dismissed += 1;
+      },
+    });
+    assert.ok(findDiffPreviewPanel(document));
+
+    const escape = new window.Event("keydown", { bubbles: true, cancelable: true });
+    Object.defineProperty(escape, "key", { value: "Escape" });
+    document.dispatchEvent(escape);
+
+    assert.equal(dismissed, 1);
+    assert.equal(findDiffPreviewPanel(document), null);
+
+    // Remount + dismissDiffPreviewPanel must not leave a dangling Escape handler
+    // that fires onDismiss for a panel that is already gone.
+    mountDiffPreviewPanel(toolbar, {
+      before: "c",
+      after: "d",
+      onApply: () => undefined,
+      onDismiss: () => {
+        dismissed += 1;
+      },
+    });
+    dismissDiffPreviewPanel(document);
+    const escapeAgain = new window.Event("keydown", { bubbles: true, cancelable: true });
+    Object.defineProperty(escapeAgain, "key", { value: "Escape" });
+    document.dispatchEvent(escapeAgain);
+    assert.equal(dismissed, 1);
+  });
 });

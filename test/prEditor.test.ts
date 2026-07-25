@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { parseHTML } from "linkedom";
 import {
   CANCEL_BTN_CLASS,
+  FORMAT_BTN_CLASS,
   MARKER_ATTR,
   PITCH_BTN_CLASS,
   PRESET_SELECT_CLASS,
@@ -16,6 +17,7 @@ import {
   findToolbarPresetSelect,
   hideFormatCancelButton,
   injectFormatButton,
+  listToolbarFocusOrder,
   readPrDescription,
   setToolbarActionsDisabled,
   setToolbarPreset,
@@ -410,6 +412,87 @@ describe("injectFormatButton / ensureFormatControl", () => {
     assert.equal(pitch.disabled, true);
     setToolbarActionsDisabled(toolbar, false);
     assert.equal(quiz.disabled, false);
+  });
+
+  it("exposes toolbar keyboard/a11y labels and focus order", () => {
+    const { document } = load(`
+      <div class="wrap">
+        <textarea id="pull_request_body">body</textarea>
+      </div>
+    `);
+    const target = findPrDescriptionTarget(document)!;
+    injectFormatButton(
+      target.element,
+      {
+        onFormat: () => undefined,
+        onQuiz: () => undefined,
+        onPitch: () => undefined,
+      },
+      target,
+    );
+
+    const toolbar = document.querySelector(`.${TOOLBAR_CLASS}`) as HTMLElement;
+    assert.ok(toolbar);
+    assert.equal(toolbar.getAttribute("role"), "toolbar");
+    assert.equal(toolbar.getAttribute("aria-label"), "MD Formatter");
+
+    const select = findToolbarPresetSelect(toolbar)!;
+    const format = toolbar.querySelector(
+      `button.${FORMAT_BTN_CLASS}:not(.${QUIZ_BTN_CLASS}):not(.${PITCH_BTN_CLASS})`,
+    ) as HTMLButtonElement;
+    const quiz = toolbar.querySelector(`.${QUIZ_BTN_CLASS}`) as HTMLButtonElement;
+    const pitch = toolbar.querySelector(`.${PITCH_BTN_CLASS}`) as HTMLButtonElement;
+    const cancel = toolbar.querySelector(`.${CANCEL_BTN_CLASS}`) as HTMLButtonElement;
+
+    assert.equal(select.getAttribute("aria-label"), "Formatting style");
+    assert.equal(
+      format.getAttribute("aria-label"),
+      "Format current PR description with MD Formatter",
+    );
+    assert.equal(
+      quiz.getAttribute("aria-label"),
+      "Generate a release quiz from the current PR description",
+    );
+    assert.equal(
+      pitch.getAttribute("aria-label"),
+      "Generate an elevator pitch from the current PR description",
+    );
+    assert.equal(cancel.getAttribute("aria-label"), "Cancel in-flight request");
+    assert.equal(cancel.hidden, true);
+    assert.equal(cancel.getAttribute("tabindex"), "-1");
+    assert.equal(cancel.getAttribute("aria-hidden"), "true");
+
+    assert.deepEqual(
+      listToolbarFocusOrder(toolbar).map((el) => el.className),
+      [
+        PRESET_SELECT_CLASS,
+        FORMAT_BTN_CLASS,
+        `${FORMAT_BTN_CLASS} ${QUIZ_BTN_CLASS}`,
+        `${FORMAT_BTN_CLASS} ${PITCH_BTN_CLASS}`,
+      ],
+    );
+
+    showFormatCancelButton(toolbar, () => undefined);
+    assert.equal(cancel.hidden, false);
+    assert.equal(cancel.getAttribute("tabindex"), "0");
+    assert.equal(cancel.getAttribute("aria-hidden"), "false");
+    assert.deepEqual(
+      listToolbarFocusOrder(toolbar).map((el) => el.className),
+      [
+        PRESET_SELECT_CLASS,
+        FORMAT_BTN_CLASS,
+        `${FORMAT_BTN_CLASS} ${QUIZ_BTN_CLASS}`,
+        `${FORMAT_BTN_CLASS} ${PITCH_BTN_CLASS}`,
+        CANCEL_BTN_CLASS,
+      ],
+    );
+
+    hideFormatCancelButton(toolbar);
+    assert.equal(cancel.getAttribute("tabindex"), "-1");
+    assert.equal(
+      listToolbarFocusOrder(toolbar).some((el) => el.classList.contains(CANCEL_BTN_CLASS)),
+      false,
+    );
   });
 
   it("mounts an in-page preset picker that reports changes", () => {

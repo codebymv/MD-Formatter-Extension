@@ -31,13 +31,16 @@ smarter when you configure an OpenAI-compatible API key.
 - Content script on GitHub, GitLab, and Forgejo-style `/pulls` / `/compare` URLs:
   injects an in-page toolbar (style picker + **Format Markdown** / **Quiz me** /
   **Elevator pitch**) above the PR / MR description editor (classic textarea,
-  scoped GitHub ProseMirror, or GitLab TipTap / Content Editor). Format, Quiz,
-  and Pitch each show a before/after **diff preview** (default **Columns**
-  side-by-side, toggle **Unified**; layout preference shared with the popup)
-  with **Apply** / **Dismiss** before writing; work runs via the background
-  service worker. Quiz me and Elevator pitch need a model endpoint (same as the
-  popup). While a model stream is in flight, the toolbar shows **char-count
-  progress** and a shared **Cancel** control that aborts via AbortSignal.
+  scoped GitHub ProseMirror, or GitLab TipTap / Content Editor). The toolbar is a
+  labeled `role="toolbar"` with aria-labels on the style picker, Format / Quiz /
+  Pitch / Cancel, and a stable tab order (Cancel stays out of the tab order until
+  a job is in flight). Format, Quiz, and Pitch each show a before/after **diff
+  preview** (default **Columns** side-by-side, toggle **Unified**; layout
+  preference shared with the popup) with **Apply** / **Dismiss** before writing;
+  **Escape** dismisses an open preview. Work runs via the background service
+  worker. Quiz me and Elevator pitch need a model endpoint (same as the popup).
+  While a model stream is in flight, the toolbar shows **char-count progress**
+  and a shared **Cancel** control that aborts via AbortSignal.
 - Inline `code` for routes, file names, env vars, commands, config keys.
 - Bullet lists per section; fenced code blocks and existing formatting preserved.
 - Two backends behind one `formatPrDescription()` abstraction: an offline
@@ -76,7 +79,7 @@ Useful scripts:
 | `npm run dev` | Rebuild `dist/` on every change (reload the extension to see updates) |
 | `npm run dev:preview` | Run the popup in a normal browser tab at `http://localhost:5174` (offline formatter only — `chrome.*` APIs are stubbed) |
 | `npm run typecheck` | Type-check only |
-| `npm test` | Unit tests (formatter, SSE stream / abort with mocked fetch, release quiz + elevator pitch parse/normalize + mocked SSE, format job + popup cancel sessions, in-page Format / Quiz / Pitch progress labels + generate protocol, endpoint presets, profiles, PR editor DOM helpers, line diff / preview panel) |
+| `npm test` | Unit tests (formatter, SSE stream / abort with mocked fetch, release quiz + elevator pitch parse/normalize + mocked SSE, format job + popup cancel sessions, in-page Format / Quiz / Pitch progress labels + generate protocol, endpoint presets, profiles, PR editor DOM helpers + toolbar keyboard/a11y focus order, line diff / preview panel + Escape dismiss) |
 
 ---
 
@@ -186,9 +189,9 @@ MD-formatter/
       popup.css          # styles
     content/
       contentScript.ts   # GitHub / Forgejo / GitLab injection entry
-      prEditor.ts        # find PR/MR body + mount toolbar (style + Format / Quiz / Pitch + Cancel)
+      prEditor.ts        # find PR/MR body + mount toolbar (style + Format / Quiz / Pitch + Cancel; a11y)
       formatProgress.ts  # stream progress labels + request id helpers (format / quiz / pitch)
-      diffPreviewPanel.ts # in-page before/after line-diff panel (Apply / Dismiss; Columns / Unified)
+      diffPreviewPanel.ts # in-page before/after line-diff panel (Apply / Dismiss / Escape; Columns / Unified)
     diff/
       lineDiff.ts        # pure line LCS + side-by-side pairing (popup + content)
     background/
