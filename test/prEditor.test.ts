@@ -4,16 +4,20 @@ import { parseHTML } from "linkedom";
 import {
   CANCEL_BTN_CLASS,
   MARKER_ATTR,
+  PITCH_BTN_CLASS,
   PRESET_SELECT_CLASS,
+  QUIZ_BTN_CLASS,
   TOOLBAR_CLASS,
   applyFormattedText,
   ensureFormatControl,
   findPrDescriptionField,
   findPrDescriptionTarget,
+  findToolbarActionButtons,
   findToolbarPresetSelect,
   hideFormatCancelButton,
   injectFormatButton,
   readPrDescription,
+  setToolbarActionsDisabled,
   setToolbarPreset,
   showFormatCancelButton,
   writePrDescription,
@@ -361,6 +365,51 @@ describe("injectFormatButton / ensureFormatControl", () => {
 
     btn?.click();
     assert.equal(clicks, 1);
+  });
+
+  it("mounts Quiz me + Elevator pitch when handlers are provided", () => {
+    const { document } = load(`
+      <div class="wrap">
+        <textarea id="pull_request_body">body</textarea>
+      </div>
+    `);
+    const target = findPrDescriptionTarget(document)!;
+    let quizClicks = 0;
+    let pitchClicks = 0;
+    injectFormatButton(
+      target.element,
+      {
+        onFormat: () => undefined,
+        onQuiz: () => {
+          quizClicks += 1;
+        },
+        onPitch: () => {
+          pitchClicks += 1;
+        },
+      },
+      target,
+    );
+
+    const toolbar = document.querySelector(`.${TOOLBAR_CLASS}`) as HTMLElement;
+    assert.ok(toolbar);
+    const quiz = toolbar.querySelector(`.${QUIZ_BTN_CLASS}`) as HTMLButtonElement;
+    const pitch = toolbar.querySelector(`.${PITCH_BTN_CLASS}`) as HTMLButtonElement;
+    assert.ok(quiz);
+    assert.ok(pitch);
+    assert.equal(quiz.textContent, "Quiz me");
+    assert.equal(pitch.textContent, "Elevator pitch");
+    assert.equal(findToolbarActionButtons(toolbar).length, 3);
+
+    quiz.click();
+    pitch.click();
+    assert.equal(quizClicks, 1);
+    assert.equal(pitchClicks, 1);
+
+    setToolbarActionsDisabled(toolbar, true);
+    assert.equal(quiz.disabled, true);
+    assert.equal(pitch.disabled, true);
+    setToolbarActionsDisabled(toolbar, false);
+    assert.equal(quiz.disabled, false);
   });
 
   it("mounts an in-page preset picker that reports changes", () => {

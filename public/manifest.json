@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MD Formatter",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "description": "Turn messy pull request notes into clean, well-structured Markdown you can paste into GitHub, Forgejo, or GitLab.",
   "action": {
     "default_title": "MD Formatter",

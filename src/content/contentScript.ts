@@ -3,12 +3,17 @@ import {
   hideFormatCancelButton,
   PrBodyTarget,
   readPrDescription,
+  setToolbarActionsDisabled,
   setToolbarSelection,
   showFormatCancelButton,
   TOOLBAR_CLASS,
   writePrDescription,
 } from "./prEditor";
-import { createFormatRequestId, formatStreamProgressLabel } from "./formatProgress";
+import {
+  createJobRequestId,
+  InPageJobKind,
+  streamProgressLabel,
+} from "./formatProgress";
 import {
   dismissDiffPreviewPanel,
   mountDiffPreviewPanel,
@@ -16,7 +21,9 @@ import {
 import {
   CANCEL_FORMAT_PR_DESCRIPTION,
   FORMAT_PR_DESCRIPTION,
+  GENERATE_PR_ARTIFACT,
   FormatPrDescriptionResponse,
+  PrArtifactKind,
   isCancelledFormatResponse,
   isFormatPrProgressMessage,
 } from "../messaging/protocol";
@@ -32,9 +39,10 @@ import {
 
 const IDLE_MS = 400;
 
-/** Correlates progress events with the Format currently driving the toolbar. */
+/** Correlates progress events with the job currently driving the toolbar. */
 let activeRequestId: string | null = null;
-let activeFormatButton: HTMLButtonElement | null = null;
+let activeJobButton: HTMLButtonElement | null = null;
+let activeJobKind: InPageJobKind | null = null;
 
 async function requestFormat(
   input: string,
@@ -47,7 +55,20 @@ async function requestFormat(
   }) as Promise<FormatPrDescriptionResponse>;
 }
 
-async function requestCancelFormat(requestId: string): Promise<void> {
+async function requestGenerate(
+  kind: PrArtifactKind,
+  input: string,
+  requestId: string,
+): Promise<FormatPrDescriptionResponse> {
+  return chrome.runtime.sendMessage({
+    type: GENERATE_PR_ARTIFACT,
+    kind,
+    input,
+    requestId,
+  }) as Promise<FormatPrDescriptionResponse>;
+}
+
+async function requestCancelJob(requestId: string): Promise<void> {
   try {
     await chrome.runtime.sendMessage({
       type: CANCEL_FORMAT_PR_DESCRIPTION,
@@ -66,48 +87,88 @@ function toolbarNear(surface: HTMLElement): HTMLElement | null {
   return surface.parentElement?.querySelector(`.${TOOLBAR_CLASS}`) ?? null;
 }
 
+function emptyInputTitle(kind: InPageJobKind): string {
+  if (kind === "quiz") return "PR description is empty — paste notes before Quiz me";
+  if (kind === "pitch") {
+    return "PR description is empty — paste notes before Elevator pitch";
+  }
+  return "PR description is empty";
+}
+
+function failLabel(kind: InPageJobKind): string {
+  if (kind === "quiz") return "Quiz failed";
+  if (kind === "pitch") return "Pitch failed";
+  return "Format failed";
+}
+
+function successTransientLabel(kind: InPageJobKind): string {
+  if (kind === "quiz") return "Quiz ready";
+  if (kind === "pitch") return "Pitch ready";
+  return "Preview ready";
+}
+
+function cancellingTitle(kind: InPageJobKind): string {
+  if (kind === "quiz") return "Cancelling quiz request";
+  if (kind === "pitch") return "Cancelling elevator pitch request";
+  return "Cancelling format request";
+}
+
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message) => {
     if (!isFormatPrProgressMessage(message)) return;
     if (!activeRequestId || message.requestId !== activeRequestId) return;
-    if (!activeFormatButton) return;
-    activeFormatButton.textContent = formatStreamProgressLabel(message.accumulatedChars);
-    activeFormatButton.title = `${message.accumulatedChars} characters streamed`;
+    if (!activeJobButton || !activeJobKind) return;
+    activeJobButton.textContent = streamProgressLabel(
+      activeJobKind,
+      message.accumulatedChars,
+    );
+    activeJobButton.title = `${message.accumulatedChars} characters streamed`;
   });
 }
 
-async function onFormat(
+async function runInPageJob(
+  kind: InPageJobKind,
   target: PrBodyTarget,
   button: HTMLButtonElement,
 ): Promise<void> {
   const raw = readPrDescription(target);
   if (!raw.trim()) {
-    button.title = "PR description is empty";
+    button.title = emptyInputTitle(kind);
     return;
   }
 
   const previous = button.textContent;
-  const requestId = createFormatRequestId();
+  const requestId = createJobRequestId(kind);
   activeRequestId = requestId;
-  activeFormatButton = button;
+  activeJobButton = button;
+  activeJobKind = kind;
 
   const toolbar = toolbarNear(target.element);
-  button.disabled = true;
-  button.textContent = formatStreamProgressLabel(0);
+  setToolbarActionsDisabled(toolbar, true);
+  button.textContent = streamProgressLabel(kind, 0);
   button.title = "";
 
   if (toolbar) {
     showFormatCancelButton(toolbar, () => {
       button.textContent = "Cancelling…";
-      button.title = "Cancelling format request";
-      void requestCancelFormat(requestId);
+      button.title = cancellingTitle(kind);
+      void requestCancelJob(requestId);
     });
   }
 
   try {
-    const response = await requestFormat(raw, requestId);
+    const response =
+      kind === "format"
+        ? await requestFormat(raw, requestId)
+        : await requestGenerate(kind, raw, requestId);
+
     if (isCancelledFormatResponse(response)) {
-      button.title = "Formatting cancelled";
+      button.title =
+        kind === "quiz"
+          ? "Quiz cancelled"
+          : kind === "pitch"
+            ? "Elevator pitch cancelled"
+            : "Formatting cancelled";
       button.textContent = "Cancelled";
       window.setTimeout(() => {
         button.textContent = previous;
@@ -117,8 +178,9 @@ async function onFormat(
     }
 
     if (!response?.ok) {
-      button.title = response && "error" in response ? response.error : "Formatting failed";
-      button.textContent = "Format failed";
+      button.title =
+        response && "error" in response ? response.error : `${failLabel(kind)}`;
+      button.textContent = failLabel(kind);
       window.setTimeout(() => {
         button.textContent = previous;
       }, 2000);
@@ -128,7 +190,7 @@ async function onFormat(
     if (!toolbar) {
       // Fallback: apply immediately if the toolbar mount point disappeared.
       writePrDescription(target, response.markdown);
-      button.textContent = "Formatted";
+      button.textContent = kind === "format" ? "Formatted" : "Applied";
       window.setTimeout(() => {
         button.textContent = previous;
       }, 1500);
@@ -137,7 +199,7 @@ async function onFormat(
 
     if (!markdownChanged(raw, response.markdown)) {
       dismissDiffPreviewPanel(toolbar.parentElement ?? document);
-      button.title = "Already matches the formatted result";
+      button.title = "Already matches the generated result";
       button.textContent = "No changes";
       window.setTimeout(() => {
         button.textContent = previous;
@@ -165,34 +227,64 @@ async function onFormat(
         button.textContent = previous;
       },
     });
-    button.textContent = "Preview ready";
+    button.textContent = successTransientLabel(kind);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Could not reach the MD Formatter extension.";
     button.title = message;
-    button.textContent = "Format failed";
+    button.textContent = failLabel(kind);
     window.setTimeout(() => {
       button.textContent = previous;
     }, 2000);
   } finally {
     if (activeRequestId === requestId) {
       activeRequestId = null;
-      activeFormatButton = null;
+      activeJobButton = null;
+      activeJobKind = null;
     }
     hideFormatCancelButton(toolbar);
-    button.disabled = false;
+    setToolbarActionsDisabled(toolbar, false);
   }
+}
+
+async function onFormat(
+  target: PrBodyTarget,
+  button: HTMLButtonElement,
+): Promise<void> {
+  await runInPageJob("format", target, button);
+}
+
+async function onQuiz(
+  target: PrBodyTarget,
+  button: HTMLButtonElement,
+): Promise<void> {
+  await runInPageJob("quiz", target, button);
+}
+
+async function onPitch(
+  target: PrBodyTarget,
+  button: HTMLButtonElement,
+): Promise<void> {
+  await runInPageJob("pitch", target, button);
 }
 
 async function onSelectionChange(selection: FormatSelection): Promise<void> {
   await saveFormatSelection(selection);
 }
 
+function toolbarHandlers() {
+  return {
+    onFormat,
+    onQuiz,
+    onPitch,
+    onSelectionChange,
+  };
+}
+
 async function mount(): Promise<void> {
   const { selection, profiles } = await loadActiveFormatGuide();
   ensureFormatControl(document, {
-    onFormat,
-    onSelectionChange,
+    ...toolbarHandlers(),
     selection,
     profiles,
   });
@@ -221,8 +313,7 @@ if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
         const profiles = await loadProfiles();
         const selection = await loadFormatSelection(profiles);
         ensureFormatControl(document, {
-          onFormat,
-          onSelectionChange,
+          ...toolbarHandlers(),
           selection,
           profiles,
         });

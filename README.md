@@ -29,14 +29,15 @@ smarter when you configure an OpenAI-compatible API key.
   built-in), pick it from the popup or in-page toolbar, and delete it later.
   Profiles are stored in `chrome.storage.local` (max 20).
 - Content script on GitHub, GitLab, and Forgejo-style `/pulls` / `/compare` URLs:
-  injects an in-page toolbar (style picker + **Format Markdown**) above the
-  PR / MR description editor (classic textarea, scoped GitHub ProseMirror, or
-  GitLab TipTap / Content Editor). Format shows a before/after **diff preview**
-  (default **Columns** side-by-side, toggle **Unified**; layout preference
-  shared with the popup) with **Apply** / **Dismiss** before writing;
-  formatting itself runs via the background service worker. While a model
-  stream is in flight, the toolbar shows **char-count progress** and a
-  **Cancel** control that aborts the request.
+  injects an in-page toolbar (style picker + **Format Markdown** / **Quiz me** /
+  **Elevator pitch**) above the PR / MR description editor (classic textarea,
+  scoped GitHub ProseMirror, or GitLab TipTap / Content Editor). Format, Quiz,
+  and Pitch each show a before/after **diff preview** (default **Columns**
+  side-by-side, toggle **Unified**; layout preference shared with the popup)
+  with **Apply** / **Dismiss** before writing; work runs via the background
+  service worker. Quiz me and Elevator pitch need a model endpoint (same as the
+  popup). While a model stream is in flight, the toolbar shows **char-count
+  progress** and a shared **Cancel** control that aborts via AbortSignal.
 - Inline `code` for routes, file names, env vars, commands, config keys.
 - Bullet lists per section; fenced code blocks and existing formatting preserved.
 - Two backends behind one `formatPrDescription()` abstraction: an offline
@@ -75,7 +76,7 @@ Useful scripts:
 | `npm run dev` | Rebuild `dist/` on every change (reload the extension to see updates) |
 | `npm run dev:preview` | Run the popup in a normal browser tab at `http://localhost:5174` (offline formatter only — `chrome.*` APIs are stubbed) |
 | `npm run typecheck` | Type-check only |
-| `npm test` | Unit tests (formatter, SSE stream / abort with mocked fetch, release quiz + elevator pitch parse/normalize + mocked SSE, format job + popup cancel sessions, in-page progress labels, endpoint presets, profiles, PR editor DOM helpers, line diff / preview panel) |
+| `npm test` | Unit tests (formatter, SSE stream / abort with mocked fetch, release quiz + elevator pitch parse/normalize + mocked SSE, format job + popup cancel sessions, in-page Format / Quiz / Pitch progress labels + generate protocol, endpoint presets, profiles, PR editor DOM helpers, line diff / preview panel) |
 
 ---
 
@@ -173,7 +174,7 @@ Then click **Copy Markdown** — the button briefly reads **Copied**.
 MD-formatter/
   public/
     manifest.json        # MV3 manifest (copied verbatim into dist/)
-    content.css          # styles for the in-page Format button
+    content.css          # styles for the in-page toolbar + preview
     icons/               # generated PNG icons
   popup.html             # production popup entry (build input)
   index.html             # dev-only entry for npm run dev:preview
@@ -185,16 +186,16 @@ MD-formatter/
       popup.css          # styles
     content/
       contentScript.ts   # GitHub / Forgejo / GitLab injection entry
-      prEditor.ts        # find PR/MR body + mount toolbar (style + Format + Cancel)
-      formatProgress.ts  # stream progress label + request id helpers
+      prEditor.ts        # find PR/MR body + mount toolbar (style + Format / Quiz / Pitch + Cancel)
+      formatProgress.ts  # stream progress labels + request id helpers (format / quiz / pitch)
       diffPreviewPanel.ts # in-page before/after line-diff panel (Apply / Dismiss; Columns / Unified)
     diff/
       lineDiff.ts        # pure line LCS + side-by-side pairing (popup + content)
     background/
-      serviceWorker.ts   # message handler → formatPrDescription (+ progress / cancel)
+      serviceWorker.ts   # message handler → format / quiz / pitch (+ progress / cancel)
       formatJobs.ts      # in-flight AbortController registry (requestId)
     messaging/
-      protocol.ts        # typed content ↔ background messages (format / progress / cancel)
+      protocol.ts        # typed content ↔ background messages (format / generate / progress / cancel)
     formatter/
       formatPrDescription.ts  # public API: local + OpenAI-compatible streaming backends
       releaseQuiz.ts          # "Quiz me" prompts, Q/A parse, model-backed generation
@@ -229,10 +230,11 @@ service worker, which calls `formatPrDescription()` with the active style
   vars, file names, commands), but it does **not** infer tables or backtick
   ambiguous identifiers like `AuthGuard`. Configure an API key for full
   formatting (tables, smarter inline code, prose cleanup).
-- **In-page Format streams progress, not live editor text.** While formatting,
-  the toolbar shows streamed character counts and **Cancel**; the PR body is
-  unchanged until you **Apply** the diff preview. The popup paints tokens into
-  its output textarea as they arrive and offers **Cancel** mid-stream.
+- **In-page Format / Quiz / Pitch stream progress, not live editor text.** While
+  a job runs, the toolbar shows streamed character counts and **Cancel**; the PR
+  body is unchanged until you **Apply** the diff preview. The popup paints
+  tokens into its output textarea as they arrive and offers **Cancel**
+  mid-stream.
 - **CORS.** Some self-hosted OpenAI-compatible endpoints may reject extension
   requests unless they allow the extension origin.
 - **GitHub rich editors.** The in-page button targets classic `textarea` PR

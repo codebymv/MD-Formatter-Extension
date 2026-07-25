@@ -27,6 +27,8 @@ export const MARKER_ATTR = "data-md-formatter-bound";
 export const TOOLBAR_CLASS = "md-formatter-toolbar";
 export const PRESET_SELECT_CLASS = "md-formatter-preset";
 export const FORMAT_BTN_CLASS = "md-formatter-btn";
+export const QUIZ_BTN_CLASS = "md-formatter-quiz";
+export const PITCH_BTN_CLASS = "md-formatter-pitch";
 export const CANCEL_BTN_CLASS = "md-formatter-cancel";
 
 const DEFAULT_TOOLBAR_SELECTION: FormatSelection = { kind: "preset", id: "standard" };
@@ -389,6 +391,10 @@ function replaceProseMirrorPlain(editor: HTMLElement, markdown: string): void {
 
 export interface FormatButtonHandlers {
   onFormat: (target: PrBodyTarget, button: HTMLButtonElement) => void | Promise<void>;
+  /** Optional popup-parity "Quiz me" action (model-backed). */
+  onQuiz?: (target: PrBodyTarget, button: HTMLButtonElement) => void | Promise<void>;
+  /** Optional popup-parity "Elevator pitch" action (model-backed). */
+  onPitch?: (target: PrBodyTarget, button: HTMLButtonElement) => void | Promise<void>;
   /** Active formatting preset shown in the in-page picker (default: standard). */
   preset?: FormatPreset;
   /** Active selection (built-in or saved profile). Wins over `preset` when set. */
@@ -541,7 +547,7 @@ function createPresetSelect(
 }
 
 /**
- * Show (or reuse) a Cancel control on the toolbar for an in-flight Format.
+ * Show (or reuse) a Cancel control on the toolbar for an in-flight job.
  */
 export function showFormatCancelButton(
   toolbar: HTMLElement,
@@ -553,7 +559,7 @@ export function showFormatCancelButton(
     button.type = "button";
     button.className = CANCEL_BTN_CLASS;
     button.textContent = "Cancel";
-    button.setAttribute("aria-label", "Cancel formatting");
+    button.setAttribute("aria-label", "Cancel in-flight request");
     toolbar.appendChild(button);
   }
   button.hidden = false;
@@ -566,7 +572,7 @@ export function showFormatCancelButton(
   return button;
 }
 
-/** Hide the Cancel control after Format completes / fails / is cancelled. */
+/** Hide the Cancel control after a job completes / fails / is cancelled. */
 export function hideFormatCancelButton(toolbar: HTMLElement | null | undefined): void {
   if (!toolbar) return;
   const button = toolbar.querySelector<HTMLButtonElement>(`.${CANCEL_BTN_CLASS}`);
@@ -576,10 +582,53 @@ export function hideFormatCancelButton(toolbar: HTMLElement | null | undefined):
   button.onclick = null;
 }
 
+/** Action buttons on the toolbar (Format / Quiz / Pitch), excluding Cancel. */
+export function findToolbarActionButtons(toolbar: HTMLElement): HTMLButtonElement[] {
+  return Array.from(
+    toolbar.querySelectorAll<HTMLButtonElement>(`button.${FORMAT_BTN_CLASS}`),
+  );
+}
+
+/** Enable or disable Format / Quiz / Pitch while one job is in flight. */
+export function setToolbarActionsDisabled(
+  toolbar: HTMLElement | null | undefined,
+  disabled: boolean,
+): void {
+  if (!toolbar) return;
+  for (const button of findToolbarActionButtons(toolbar)) {
+    button.disabled = disabled;
+  }
+}
+
+function appendActionButton(
+  row: HTMLElement,
+  options: {
+    className: string;
+    label: string;
+    ariaLabel: string;
+    title: string;
+    onClick: (button: HTMLButtonElement) => void | Promise<void>;
+  },
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = options.className;
+  button.textContent = options.label;
+  button.setAttribute("aria-label", options.ariaLabel);
+  button.title = options.title;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void options.onClick(button);
+  });
+  row.appendChild(button);
+  return button;
+}
+
 /**
- * Insert a Format Markdown toolbar (preset picker + button) above the editor
- * surface (once). Returns the button, or null if the field was already bound /
- * missing a mount point.
+ * Insert a Format Markdown toolbar (preset picker + Format / Quiz / Pitch +
+ * Cancel) above the editor surface (once). Returns the Format button, or null
+ * if the field was already bound / missing a mount point.
  */
 export function injectFormatButton(
   surface: HTMLElement,
@@ -602,26 +651,40 @@ export function injectFormatButton(
     ),
   );
 
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = FORMAT_BTN_CLASS;
-  button.textContent = "Format Markdown";
-  button.setAttribute("aria-label", "Format current PR description with MD Formatter");
-
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    void handlers.onFormat(target, button);
+  const button = appendActionButton(row, {
+    className: FORMAT_BTN_CLASS,
+    label: "Format Markdown",
+    ariaLabel: "Format current PR description with MD Formatter",
+    title: "Format Markdown",
+    onClick: (btn) => handlers.onFormat(target, btn),
   });
 
-  row.appendChild(button);
+  if (handlers.onQuiz) {
+    appendActionButton(row, {
+      className: `${FORMAT_BTN_CLASS} ${QUIZ_BTN_CLASS}`,
+      label: "Quiz me",
+      ariaLabel: "Generate a release quiz from the current PR description",
+      title: "Generate a short Q&A quiz from this description (model required)",
+      onClick: (btn) => handlers.onQuiz?.(target, btn),
+    });
+  }
 
-  // Present but hidden until a Format is in flight.
+  if (handlers.onPitch) {
+    appendActionButton(row, {
+      className: `${FORMAT_BTN_CLASS} ${PITCH_BTN_CLASS}`,
+      label: "Elevator pitch",
+      ariaLabel: "Generate an elevator pitch from the current PR description",
+      title: "Generate a short elevator pitch from this description (model required)",
+      onClick: (btn) => handlers.onPitch?.(target, btn),
+    });
+  }
+
+  // Present but hidden until a job is in flight.
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = CANCEL_BTN_CLASS;
   cancel.textContent = "Cancel";
-  cancel.setAttribute("aria-label", "Cancel formatting");
+  cancel.setAttribute("aria-label", "Cancel in-flight request");
   cancel.hidden = true;
   cancel.disabled = true;
   row.appendChild(cancel);

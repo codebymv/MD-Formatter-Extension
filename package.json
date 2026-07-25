@@ -1,6 +1,6 @@
 {
   "name": "md-formatter",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "description": "Chrome extension that cleans up unstructured PR descriptions into well-formatted Markdown.",
   "private": true,
   "type": "module",
